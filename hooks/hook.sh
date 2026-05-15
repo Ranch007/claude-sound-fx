@@ -25,6 +25,16 @@ CONFIG_FILE="$HOME/.claude/sound-fx.local.json"
 SOUND_VOLUME=${CLAUDE_SOUND_VOLUME:-60}
 SOUND_PORT=${CLAUDE_SOUND_PORT:-19876}
 
+# 为 Windows Python 兼容性转换路径（Git Bash / MSYS2 / Cygwin）
+IS_MINGW=false
+case "$(uname)" in
+  MINGW*|MSYS*|CYGWIN*)
+    IS_MINGW=true
+    CONFIG_FILE=$(cygpath -m "$CONFIG_FILE" 2>/dev/null || echo "$CONFIG_FILE")
+    ASSETS_DIR=$(cygpath -m "$ASSETS_DIR" 2>/dev/null || echo "$ASSETS_DIR")
+    ;;
+esac
+
 EVENT="$1"
 [ -z "$EVENT" ] && exit 0
 
@@ -37,19 +47,19 @@ THEME="mix"
 MODE="full"
 ENABLED="True"
 if [ -f "$CONFIG_FILE" ]; then
-  THEME=$(python3 -c "
+  THEME=$(python -c "
 import json
-c = json.load(open('$CONFIG_FILE'))
+c = json.load(open('$CONFIG_FILE', encoding='utf-8'))
 print(c.get('theme', 'mix'))
 " 2>/dev/null || echo "mix")
-  MODE=$(python3 -c "
+  MODE=$(python -c "
 import json
-c = json.load(open('$CONFIG_FILE'))
+c = json.load(open('$CONFIG_FILE', encoding='utf-8'))
 print(c.get('mode', 'full'))
 " 2>/dev/null || echo "full")
-  ENABLED=$(python3 -c "
+  ENABLED=$(python -c "
 import json
-c = json.load(open('$CONFIG_FILE'))
+c = json.load(open('$CONFIG_FILE', encoding='utf-8'))
 print(c.get('enabled', True))
 " 2>/dev/null || echo "True")
 fi
@@ -99,7 +109,7 @@ fi
 
 # Collect candidates from manifest.json files
 # If theme=mix, scan all directories; otherwise only the matching one
-CANDIDATES=$(python3 -c "
+CANDIDATES=$(python -c "
 import json, os, sys
 
 assets_dir = '$ASSETS_DIR'
@@ -116,7 +126,7 @@ for d in sorted(os.listdir(assets_dir)):
     if theme != 'mix' and d != theme:
         continue
     try:
-        m = json.load(open(manifest))
+        m = json.load(open(manifest, encoding='utf-8'))
         for f in m.get(event, []):
             path = os.path.join(theme_dir, f)
             if os.path.exists(path):
@@ -142,6 +152,10 @@ FILE="${FILES[$((RANDOM % COUNT))]}"
 PLAY_FILE="$FILE"
 if [ "$IS_WSL" = true ] && [ "$PLAYER" = "ffplay.exe" -o "$PLAYER" = "powershell.exe" ]; then
   PLAY_FILE=$(wslpath -w "$FILE" 2>/dev/null || echo "$FILE")
+fi
+# MINGW：Python 输出的 Windows 路径需转回 Unix 格式给 MinGW ffplay
+if [ "$IS_MINGW" = true ] && [ "$PLAYER" = "ffplay" ]; then
+  FILE=$(cygpath -u "$FILE" 2>/dev/null || echo "$FILE")
 fi
 
 # Play with volume control (cross-platform)
