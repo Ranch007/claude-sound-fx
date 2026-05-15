@@ -35,6 +35,9 @@ case "$(uname)" in
     ;;
 esac
 
+# 自动检测 Python 命令（macOS/Linux 用 python3，Git Bash 用 python）
+PYTHON=$(command -v python3 || command -v python || echo "python")
+
 EVENT="$1"
 [ -z "$EVENT" ] && exit 0
 
@@ -47,17 +50,17 @@ THEME="mix"
 MODE="full"
 ENABLED="True"
 if [ -f "$CONFIG_FILE" ]; then
-  THEME=$(python -c "
+  THEME=$($PYTHON -c "
 import json
 c = json.load(open('$CONFIG_FILE', encoding='utf-8'))
 print(c.get('theme', 'mix'))
 " 2>/dev/null || echo "mix")
-  MODE=$(python -c "
+  MODE=$($PYTHON -c "
 import json
 c = json.load(open('$CONFIG_FILE', encoding='utf-8'))
 print(c.get('mode', 'full'))
 " 2>/dev/null || echo "full")
-  ENABLED=$(python -c "
+  ENABLED=$($PYTHON -c "
 import json
 c = json.load(open('$CONFIG_FILE', encoding='utf-8'))
 print(c.get('enabled', True))
@@ -109,7 +112,7 @@ fi
 
 # Collect candidates from manifest.json files
 # If theme=mix, scan all directories; otherwise only the matching one
-CANDIDATES=$(python -c "
+CANDIDATES=$($PYTHON -c "
 import json, os, sys
 
 assets_dir = '$ASSETS_DIR'
