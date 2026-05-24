@@ -25,8 +25,11 @@ https://github.com/user-attachments/assets/c47537fc-1c18-4256-877d-0f22d4314bfd
 |------|:------------:|---------|
 | **macOS** | 否 | 通过 `afplay` 直接播放 |
 | **Windows (WSL)** | 否 | 通过 WSL interop 自动调用 `powershell.exe` 或 `ffplay.exe` |
+| **Windows (Git Bash)** | 否 | 自动检测 MINGW/MSYS2/Cygwin，路径转换，Windows exe 回退 |
 | **Linux 桌面** | 否 | 自动检测 `paplay` / `ffplay` / `aplay` |
 | **远程服务器 (SSH)** | 是 | 需要在本地机器上运行 relay 脚本 — 见下方 |
+
+> **Windows Git Bash 说明：** 本 fork 针对 MINGW/MSYS2/Cygwin 环境进行了专项修复 — Python 命令检测避开 Windows Store 占位符、`cygpath` 双向路径转换、无原生播放器时自动回退到 `powershell.exe`。
 
 ### 远程服务器设置
 
@@ -34,7 +37,7 @@ https://github.com/user-attachments/assets/c47537fc-1c18-4256-877d-0f22d4314bfd
 
 ```bash
 # ① 在本地机器上克隆仓库
-git clone https://github.com/6m1w/claude-sound-fx.git
+git clone https://github.com/Ranch007/claude-sound-fx.git
 
 # ② 启动 relay（后台运行，监听 19876 端口）
 python3 claude-sound-fx/scripts/relay.py &
@@ -59,7 +62,7 @@ python3 scripts/relay.py --kill    # 停止 relay
 ### Claude Code
 
 ```
-/plugin marketplace add 6m1w/claude-sound-fx
+/plugin marketplace add Ranch007/claude-sound-fx
 /plugin install sound-fx@claude-sound-fx
 ```
 

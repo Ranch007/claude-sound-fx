@@ -25,8 +25,11 @@ Works on every major platform. No extra setup needed for local use.
 |----------|:------------:|-------------|
 | **macOS** | No | Plays via `afplay` directly |
 | **Windows (WSL)** | No | Auto-calls `powershell.exe` or `ffplay.exe` via WSL interop |
+| **Windows (Git Bash)** | No | Auto-detects MINGW/MSYS2/Cygwin, converts paths, falls back to Windows exe |
 | **Linux desktop** | No | Auto-detects `paplay` / `ffplay` / `aplay` |
 | **Remote server (SSH)** | Yes | Requires a relay script on your local machine — see below |
+
+> **Windows Git Bash notes:** This fork includes fixes for MINGW/MSYS2/Cygwin environments — Python command detection avoids the Windows Store stub, `cygpath` converts paths bidirectionally, and `powershell.exe` serves as the last-resort audio player when no native player is installed.
 
 ### Remote server setup
 
@@ -34,7 +37,7 @@ When running on a headless server with no audio hardware, sounds are forwarded t
 
 ```bash
 # ① Clone the repo on your LOCAL machine
-git clone https://github.com/6m1w/claude-sound-fx.git
+git clone https://github.com/Ranch007/claude-sound-fx.git
 
 # ② Start the relay (runs in background, listens on port 19876)
 python3 claude-sound-fx/scripts/relay.py &
@@ -59,7 +62,7 @@ python3 scripts/relay.py --kill    # Stop the relay
 ### Claude Code
 
 ```
-/plugin marketplace add 6m1w/claude-sound-fx
+/plugin marketplace add Ranch007/claude-sound-fx
 /plugin install sound-fx@claude-sound-fx
 ```
 

@@ -35,8 +35,13 @@ case "$(uname)" in
     ;;
 esac
 
-# 自动检测 Python 命令（macOS/Linux 用 python3，Git Bash 用 python）
-PYTHON=$(command -v python3 || command -v python || echo "python")
+# 自动检测 Python 命令
+# MINGW：python3 可能是 Windows Store 占位符（无法执行），优先用 python
+if [ "$IS_MINGW" = true ]; then
+  PYTHON=$(command -v python || command -v python3 || echo "python")
+else
+  PYTHON=$(command -v python3 || command -v python || echo "python")
+fi
 
 EVENT="$1"
 [ -z "$EVENT" ] && exit 0
@@ -101,6 +106,14 @@ else
         break
       fi
     done
+  fi
+  # MINGW fallback: if no native player, try Windows .exe (e.g. powershell.exe)
+  if [ -z "$PLAYER" ] && [ "$IS_MINGW" = true ]; then
+    if command -v ffplay.exe >/dev/null 2>&1; then
+      PLAYER="ffplay.exe"
+    elif command -v powershell.exe >/dev/null 2>&1; then
+      PLAYER="powershell.exe"
+    fi
   fi
 fi
 

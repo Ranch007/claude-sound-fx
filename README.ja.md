@@ -25,8 +25,11 @@ https://github.com/user-attachments/assets/c47537fc-1c18-4256-877d-0f22d4314bfd
 |------------------|:------------:|--------|
 | **macOS** | 不要 | `afplay` で直接再生 |
 | **Windows (WSL)** | 不要 | WSL interop で `powershell.exe` または `ffplay.exe` を自動使用 |
+| **Windows (Git Bash)** | 不要 | MINGW/MSYS2/Cygwin を自動検出、パス変換、Windows exe にフォールバック |
 | **Linux デスクトップ** | 不要 | `paplay` / `ffplay` / `aplay` を自動検出 |
 | **リモートサーバー (SSH)** | 必要 | ローカルマシンで relay スクリプトを実行 — 下記参照 |
+
+> **Windows Git Bash について：** このフォークには MINGW/MSYS2/Cygwin 環境向けの修正が含まれています — Python コマンド検出が Windows Store スタブを回避、`cygpath` による双方向パス変換、ネイティブプレイヤー不在時の `powershell.exe` フォールバック。
 
 ### リモートサーバーセットアップ
 
@@ -34,7 +37,7 @@ https://github.com/user-attachments/assets/c47537fc-1c18-4256-877d-0f22d4314bfd
 
 ```bash
 # ① ローカルマシンでリポジトリをクローン
-git clone https://github.com/6m1w/claude-sound-fx.git
+git clone https://github.com/Ranch007/claude-sound-fx.git
 
 # ② relay を起動（バックグラウンド実行、ポート 19876 で待機）
 python3 claude-sound-fx/scripts/relay.py &
@@ -59,7 +62,7 @@ python3 scripts/relay.py --kill    # relay を停止
 ### Claude Code
 
 ```
-/plugin marketplace add 6m1w/claude-sound-fx
+/plugin marketplace add Ranch007/claude-sound-fx
 /plugin install sound-fx@claude-sound-fx
 ```
 
