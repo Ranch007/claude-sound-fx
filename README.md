@@ -24,16 +24,18 @@ Works on every major platform. No extra setup needed for local use.
 | Platform | Extra setup? | How it works |
 |----------|:------------:|-------------|
 | **macOS** | No | Plays via `afplay` directly |
-| **Windows (WSL)** | No | Auto-calls `powershell.exe` or `ffplay.exe` via WSL interop |
+| **Windows (WSL)** | No | Auto-calls `ffplay.exe` via WSL interop |
 | **Windows (Git Bash)** | No | Auto-detects MINGW/MSYS2/Cygwin, converts paths, falls back to Windows exe |
 | **Linux desktop** | No | Auto-detects `paplay` / `ffplay` / `aplay` |
 | **Remote server (SSH)** | Yes | Requires a relay script on your local machine — see below |
 
-> **Windows Git Bash notes:** This fork includes fixes for MINGW/MSYS2/Cygwin environments — Python command detection avoids the Windows Store stub, `cygpath` converts paths bidirectionally, and `powershell.exe` serves as the last-resort audio player when no native player is installed.
+> **Windows Git Bash notes:** This fork includes fixes for MINGW/MSYS2/Cygwin environments — Python command detection avoids the Windows Store stub, `cygpath` converts paths bidirectionally, and `ffplay.exe` is auto-installed via `winget` if not found.
 
 ### Remote server setup
 
-When running on a headless server with no audio hardware, sounds are forwarded to your local machine via a lightweight HTTP relay:
+When running on a headless server with no audio hardware, sounds are forwarded to your local machine via a lightweight HTTP relay. Two methods:
+
+#### Method A — SSH tunnel (recommended, encrypted)
 
 ```bash
 # ① Clone the repo on your LOCAL machine
@@ -45,8 +47,21 @@ python3 claude-sound-fx/scripts/relay.py &
 # ③ SSH into the remote server with port forwarding
 ssh -R 19876:127.0.0.1:19876 your-server
 
-# ④ On the server, use Claude Code / Opencode as usual — sounds play locally
+# ④ On the server, use Claude Code as usual — sounds play locally
 ```
+
+#### Method B — Direct IP (LAN / trusted network)
+
+```bash
+# ① On your LOCAL machine — start relay listening on all interfaces
+export CLAUDE_SOUND_RELAY_BIND=0.0.0.0
+python3 claude-sound-fx/scripts/relay.py &
+
+# ② On the REMOTE server — point to your local machine's IP
+export CLAUDE_SOUND_RELAY_HOST=192.168.1.100   # your local IP
+```
+
+No SSH tunnel needed. The hook on the server sends events directly to `http://<your-ip>:19876/<event>`.
 
 Relay commands:
 

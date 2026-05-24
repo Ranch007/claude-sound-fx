@@ -67,7 +67,7 @@ Automatically detects the available audio player:
 | Linux (PulseAudio) | `paplay` |
 | Linux (ALSA) | `aplay` |
 | Linux (ffmpeg) | `ffplay` |
-| Windows | PowerShell `SoundPlayer` |
+| Windows | `ffplay.exe` (FFmpeg) |
 
 ## Volume
 

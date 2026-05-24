@@ -109,15 +109,14 @@ function detectPlayer(): string | null {
   const os = platform()
   if (os === "darwin") return "afplay"
 
-  // WSL: prefer Windows-side players for direct audio output
+  // WSL: use ffplay.exe via interop.  If missing, install and skip.
   if (isWSL()) {
-    for (const cmd of ["ffplay.exe", "powershell.exe"]) {
-      try {
-        execSync(`which ${cmd}`, { stdio: "ignore" })
-        return cmd
-      } catch {
-        // not found
-      }
+    try {
+      execSync(`which ffplay.exe`, { stdio: "ignore" })
+      return "ffplay.exe"
+    } catch {
+      wingetInstall("winget.exe")
+      return null
     }
   }
 
@@ -131,8 +130,30 @@ function detectPlayer(): string | null {
     }
   }
 
-  if (os === "win32") return "powershell"
+  // Native Windows: use ffplay.exe.  If missing, install and skip.
+  if (os === "win32") {
+    try {
+      execSync(`which ffplay.exe`, { stdio: "ignore" })
+      return "ffplay.exe"
+    } catch {
+      wingetInstall("winget")
+      return null
+    }
+  }
   return null
+}
+
+function wingetInstall(cmd: string): void {
+  process.stderr.write("[sound-fx] ffplay.exe not found, installing FFmpeg (background)...\n")
+  const opts = "--scope user --source winget --accept-source-agreements --accept-package-agreements --silent"
+  const pkgs = ["Gyan.FFmpeg", "BtbN.FFmpeg", "Gyan.FFmpeg.Shared", "ffmpeg"]
+  const chain = pkgs.map(p => `${cmd} install ${opts} ${p}`).join(" || ")
+  try {
+    const proc = spawn(chain, [], { stdio: "ignore", detached: true, shell: true })
+    proc.unref()
+  } catch {
+    // winget not available
+  }
 }
 
 function buildPlayCmd(
@@ -152,31 +173,15 @@ function buildPlayCmd(
         "-volume", String(Math.round(vol * 100)), filepath,
       ]
     case "ffplay.exe": {
-      const winPath = wslPath(filepath)
+      // WSL: convert path to Windows format; win32: use as-is
+      const playPath = isWSL() ? wslPath(filepath) : filepath
       return [
         "ffplay.exe", "-nodisp", "-autoexit", "-loglevel", "quiet",
-        "-volume", String(volume), winPath,
+        "-volume", String(volume), playPath,
       ]
-    }
-    case "powershell.exe": {
-      const winPath = wslPath(filepath)
-      const psCmd =
-        `$w=New-Object -ComObject WMPlayer.OCX;` +
-        `$w.settings.volume=${volume};` +
-        `$w.URL='${winPath}';` +
-        `Start-Sleep 4;$w.close()`
-      return ["powershell.exe", "-NoProfile", "-Command", psCmd]
     }
     case "aplay":
       return ["aplay", "-q", filepath]
-    case "powershell": {
-      const psCmd =
-        `$w=New-Object -ComObject WMPlayer.OCX;` +
-        `$w.settings.volume=${volume};` +
-        `$w.URL='${filepath}';` +
-        `Start-Sleep 4;$w.close()`
-      return ["powershell", "-NoProfile", "-Command", psCmd]
-    }
     default:
       return null
   }

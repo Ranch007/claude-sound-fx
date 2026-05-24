@@ -24,16 +24,18 @@ https://github.com/user-attachments/assets/c47537fc-1c18-4256-877d-0f22d4314bfd
 | 平台 | 需要额外配置？ | 工作原理 |
 |------|:------------:|---------|
 | **macOS** | 否 | 通过 `afplay` 直接播放 |
-| **Windows (WSL)** | 否 | 通过 WSL interop 自动调用 `powershell.exe` 或 `ffplay.exe` |
+| **Windows (WSL)** | 否 | 通过 WSL interop 自动调用 `ffplay.exe` |
 | **Windows (Git Bash)** | 否 | 自动检测 MINGW/MSYS2/Cygwin，路径转换，Windows exe 回退 |
 | **Linux 桌面** | 否 | 自动检测 `paplay` / `ffplay` / `aplay` |
 | **远程服务器 (SSH)** | 是 | 需要在本地机器上运行 relay 脚本 — 见下方 |
 
-> **Windows Git Bash 说明：** 本 fork 针对 MINGW/MSYS2/Cygwin 环境进行了专项修复 — Python 命令检测避开 Windows Store 占位符、`cygpath` 双向路径转换、无原生播放器时自动回退到 `powershell.exe`。
+> **Windows Git Bash 说明：** 本 fork 针对 MINGW/MSYS2/Cygwin 环境进行了专项修复 — Python 命令检测避开 Windows Store 占位符、`cygpath` 双向路径转换、`ffplay.exe` 缺失时通过 `winget` 自动安装。
 
 ### 远程服务器设置
 
-在无声卡的 headless 服务器上运行时，声音通过轻量级 HTTP relay 转发到你的本地机器：
+在无声卡的 headless 服务器上运行时，声音通过轻量级 HTTP relay 转发到你的本地机器。两种方式任选：
+
+#### 方式 A — SSH 隧道（推荐，加密传输）
 
 ```bash
 # ① 在本地机器上克隆仓库
@@ -45,8 +47,21 @@ python3 claude-sound-fx/scripts/relay.py &
 # ③ SSH 连接时带端口转发
 ssh -R 19876:127.0.0.1:19876 your-server
 
-# ④ 在服务器上正常使用 Claude Code / Opencode — 声音在本地播放
+# ④ 在服务器上正常使用 Claude Code — 声音在本地播放
 ```
+
+#### 方式 B — 直连 IP（局域网 / 可信网络）
+
+```bash
+# ① 本地机器 — relay 监听所有网络接口
+export CLAUDE_SOUND_RELAY_BIND=0.0.0.0
+python3 claude-sound-fx/scripts/relay.py &
+
+# ② 远程服务器 — 指向你本地机器的 IP
+export CLAUDE_SOUND_RELAY_HOST=192.168.1.100   # 替换为你的本地 IP
+```
+
+无需 SSH 隧道。hook 会将事件直接发送到 `http://<你的IP>:19876/<事件>`。
 
 Relay 命令：
 

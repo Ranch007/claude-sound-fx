@@ -24,16 +24,18 @@ https://github.com/user-attachments/assets/c47537fc-1c18-4256-877d-0f22d4314bfd
 | プラットフォーム | 追加セットアップ | 仕組み |
 |------------------|:------------:|--------|
 | **macOS** | 不要 | `afplay` で直接再生 |
-| **Windows (WSL)** | 不要 | WSL interop で `powershell.exe` または `ffplay.exe` を自動使用 |
+| **Windows (WSL)** | 不要 | WSL interop で `ffplay.exe` を自動使用 |
 | **Windows (Git Bash)** | 不要 | MINGW/MSYS2/Cygwin を自動検出、パス変換、Windows exe にフォールバック |
 | **Linux デスクトップ** | 不要 | `paplay` / `ffplay` / `aplay` を自動検出 |
 | **リモートサーバー (SSH)** | 必要 | ローカルマシンで relay スクリプトを実行 — 下記参照 |
 
-> **Windows Git Bash について：** このフォークには MINGW/MSYS2/Cygwin 環境向けの修正が含まれています — Python コマンド検出が Windows Store スタブを回避、`cygpath` による双方向パス変換、ネイティブプレイヤー不在時の `powershell.exe` フォールバック。
+> **Windows Git Bash について：** このフォークには MINGW/MSYS2/Cygwin 環境向けの修正が含まれています — Python コマンド検出が Windows Store スタブを回避、`cygpath` による双方向パス変換、`ffplay.exe` 不在時は `winget` で自動インストール。
 
 ### リモートサーバーセットアップ
 
-オーディオハードウェアのない headless サーバーで実行する場合、軽量な HTTP relay 経由でローカルマシンにサウンドを転送します：
+オーディオハードウェアのない headless サーバーで実行する場合、軽量な HTTP relay 経由でローカルマシンにサウンドを転送します。2 つの方法があります：
+
+#### 方法 A — SSH トンネル（推奨、暗号化）
 
 ```bash
 # ① ローカルマシンでリポジトリをクローン
@@ -45,8 +47,21 @@ python3 claude-sound-fx/scripts/relay.py &
 # ③ ポート転送付きで SSH 接続
 ssh -R 19876:127.0.0.1:19876 your-server
 
-# ④ サーバー上で Claude Code / Opencode を通常通り使用 — サウンドはローカルで再生
+# ④ サーバー上で Claude Code を通常通り使用 — サウンドはローカルで再生
 ```
+
+#### 方法 B — 直接 IP（LAN / 信頼できるネットワーク）
+
+```bash
+# ① ローカルマシン — relay を全インターフェースで待機
+export CLAUDE_SOUND_RELAY_BIND=0.0.0.0
+python3 claude-sound-fx/scripts/relay.py &
+
+# ② リモートサーバー — ローカルマシンの IP を指定
+export CLAUDE_SOUND_RELAY_HOST=192.168.1.100   # 自分のローカル IP に置き換え
+```
+
+SSH トンネル不要。hook はイベントを `http://<あなたのIP>:19876/<イベント>` に直接送信します。
 
 Relay コマンド：
 

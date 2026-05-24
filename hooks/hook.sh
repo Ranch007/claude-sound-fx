@@ -24,6 +24,7 @@ ASSETS_DIR="$PLUGIN_ROOT/assets"
 CONFIG_FILE="$HOME/.claude/sound-fx.local.json"
 SOUND_VOLUME=${CLAUDE_SOUND_VOLUME:-60}
 SOUND_PORT=${CLAUDE_SOUND_PORT:-19876}
+RELAY_HOST=${CLAUDE_SOUND_RELAY_HOST:-127.0.0.1}
 
 # 为 Windows Python 兼容性转换路径（Git Bash / MSYS2 / Cygwin）
 IS_MINGW=false
@@ -83,19 +84,51 @@ if [ "$MODE" = "minimal" ]; then
   esac
 fi
 
+# ---------------------------------------------------------------------------
+# Fire-and-forget winget install with multiple fallback sources.
+# Runs in background; the current hook invocation skips playback entirely.
+# Next event will pick up the newly installed ffplay.exe.
+# ---------------------------------------------------------------------------
+_winget_install() {
+  local WGET=""
+  if command -v winget.exe >/dev/null 2>&1; then
+    WGET="winget.exe"
+  elif command -v winget >/dev/null 2>&1; then
+    WGET="winget"
+  else
+    return
+  fi
+  echo "[sound-fx] ffplay.exe not found, installing FFmpeg (background)..." >&2
+  (
+    # 0. 官方 winget 源 — Gyan build（gyan.dev 托管）
+    "$WGET" install --scope user --source winget Gyan.FFmpeg \
+      --accept-source-agreements --accept-package-agreements --silent 2>/dev/null && exit 0
+    # 1. BtbN build（GitHub 托管，国内可能更快）
+    "$WGET" install --scope user --source winget BtbN.FFmpeg \
+      --accept-source-agreements --accept-package-agreements --silent 2>/dev/null && exit 0
+    # 2. Gyan Shared build（备用）
+    "$WGET" install --scope user --source winget Gyan.FFmpeg.Shared \
+      --accept-source-agreements --accept-package-agreements --silent 2>/dev/null && exit 0
+    # 3. 通用 ffmpeg（让 winget 自行匹配最佳版本）
+    "$WGET" install --scope user --source winget ffmpeg \
+      --accept-source-agreements --accept-package-agreements --silent 2>/dev/null && exit 0
+  ) &
+}
+
 # Detect audio player: local player if available, otherwise relay
 PLAYER=""
 IS_WSL=false
 if [ "$(uname)" = "Darwin" ]; then
   PLAYER="afplay"
 else
-  # Check for WSL — try Windows-side players first
+  # WSL: use ffplay.exe via interop.  If missing, install and skip playback.
   if grep -qi microsoft /proc/version 2>/dev/null; then
     IS_WSL=true
     if command -v ffplay.exe >/dev/null 2>&1; then
       PLAYER="ffplay.exe"
-    elif command -v powershell.exe >/dev/null 2>&1; then
-      PLAYER="powershell.exe"
+    else
+      _winget_install
+      exit 0
     fi
   fi
   # Linux native players (also works if WSL has PulseAudio via WSLg)
@@ -107,19 +140,20 @@ else
       fi
     done
   fi
-  # MINGW fallback: if no native player, try Windows .exe (e.g. powershell.exe)
+  # MINGW: use ffplay.exe.  If missing, install and skip playback.
   if [ -z "$PLAYER" ] && [ "$IS_MINGW" = true ]; then
     if command -v ffplay.exe >/dev/null 2>&1; then
       PLAYER="ffplay.exe"
-    elif command -v powershell.exe >/dev/null 2>&1; then
-      PLAYER="powershell.exe"
+    else
+      _winget_install
+      exit 0
     fi
   fi
 fi
 
 # No local player found — forward to relay (remote SSH / headless)
 if [ -z "$PLAYER" ]; then
-  curl -s --connect-timeout 1 "http://127.0.0.1:${SOUND_PORT}/${EVENT}" &>/dev/null &
+  curl -s --connect-timeout 1 "http://${RELAY_HOST}:${SOUND_PORT}/${EVENT}" &>/dev/null &
   exit 0
 fi
 
@@ -166,14 +200,9 @@ FILE="${FILES[$((RANDOM % COUNT))]}"
 
 # Convert path for WSL players that need Windows paths
 PLAY_FILE="$FILE"
-if [ "$IS_WSL" = true ] && [ "$PLAYER" = "ffplay.exe" -o "$PLAYER" = "powershell.exe" ]; then
+if [ "$IS_WSL" = true ] && [ "$PLAYER" = "ffplay.exe" ]; then
   PLAY_FILE=$(wslpath -w "$FILE" 2>/dev/null || echo "$FILE")
 fi
-# MINGW：Python 输出的 Windows 路径需转回 Unix 格式给 MinGW ffplay
-if [ "$IS_MINGW" = true ] && [ "$PLAYER" = "ffplay" ]; then
-  FILE=$(cygpath -u "$FILE" 2>/dev/null || echo "$FILE")
-fi
-
 # Play with volume control (cross-platform)
 case "$PLAYER" in
   afplay)
@@ -189,9 +218,6 @@ case "$PLAYER" in
     ;;
   ffplay.exe)
     ffplay.exe -nodisp -autoexit -loglevel quiet -volume "$SOUND_VOLUME" "$PLAY_FILE" &>/dev/null &
-    ;;
-  powershell.exe)
-    powershell.exe -NoProfile -Command "\$w=New-Object -ComObject WMPlayer.OCX;\$w.settings.volume=$SOUND_VOLUME;\$w.URL='${PLAY_FILE}';\$null=\$w.controls;Start-Sleep 4;\$w.close()" &>/dev/null &
     ;;
   aplay)
     aplay -q "$FILE" &

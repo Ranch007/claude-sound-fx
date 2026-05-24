@@ -30,6 +30,7 @@ import sys
 import time
 
 PORT = int(os.environ.get("CLAUDE_SOUND_PORT", 19876))
+BIND = os.environ.get("CLAUDE_SOUND_RELAY_BIND", "127.0.0.1")
 VOLUME = int(os.environ.get("CLAUDE_SOUND_VOLUME", 60))
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ASSETS_DIR = os.path.join(BASE_DIR, "..", "assets")
@@ -121,19 +122,44 @@ def detect_player():
     """Auto-detect available audio player command."""
     if sys.platform == "darwin":
         return "afplay"
-    # WSL: prefer Windows-side players for direct audio
+    # WSL: use ffplay.exe via interop.  If missing, install and skip.
     if is_wsl():
-        for cmd in ["ffplay.exe", "powershell.exe"]:
-            if shutil.which(cmd):
-                return cmd
+        if shutil.which("ffplay.exe"):
+            return "ffplay.exe"
+        else:
+            _winget_install("winget.exe")
+            return None
     # Linux native players (also works if WSL has PulseAudio via WSLg)
     for cmd in ["paplay", "ffplay", "aplay"]:
         if shutil.which(cmd):
             return cmd
-    # Native Windows
+    # Native Windows: use ffplay.exe.  If missing, install and skip.
     if sys.platform == "win32":
-        return "powershell"
+        if shutil.which("ffplay.exe"):
+            return "ffplay.exe"
+        else:
+            _winget_install("winget")
+            return None
     return None
+
+
+def _winget_install(winget_cmd):
+    """Fire-and-forget winget install with multiple fallback sources."""
+    print("[sound-fx] ffplay.exe not found, installing FFmpeg (background)...",
+          file=sys.stderr)
+    opts = ("--scope user --source winget --accept-source-agreements "
+            "--accept-package-agreements --silent")
+    pkgs = ["Gyan.FFmpeg", "BtbN.FFmpeg", "Gyan.FFmpeg.Shared", "ffmpeg"]
+    chain = " || ".join(
+        f"{winget_cmd} install {opts} {pkg}" for pkg in pkgs
+    )
+    try:
+        subprocess.Popen(
+            chain, shell=True,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass
 
 
 def build_play_cmd(player, filepath, volume):
@@ -149,32 +175,13 @@ def build_play_cmd(player, filepath, volume):
         return ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet",
                 "-volume", str(int(vol * 100)), filepath]
     if player == "ffplay.exe":
-        # WSL: convert path and call Windows ffplay
-        win_path = wsl_path(filepath)
+        # WSL: convert path to Windows format; win32: use as-is
+        play_path = wsl_path(filepath) if is_wsl() else filepath
         return ["ffplay.exe", "-nodisp", "-autoexit", "-loglevel", "quiet",
-                "-volume", str(volume), win_path]
-    if player == "powershell.exe":
-        # WSL: use WMPlayer.OCX COM object (supports mp3)
-        win_path = wsl_path(filepath)
-        ps_cmd = (
-            f"$w=New-Object -ComObject WMPlayer.OCX;"
-            f"$w.settings.volume={volume};"
-            f"$w.URL='{win_path}';"
-            f"Start-Sleep 4;$w.close()"
-        )
-        return ["powershell.exe", "-NoProfile", "-Command", ps_cmd]
+                "-volume", str(volume), play_path]
     if player == "aplay":
         # aplay has no volume flag; play at system volume
         return ["aplay", "-q", filepath]
-    if player == "powershell":
-        # Native Windows: use WMPlayer.OCX
-        ps_cmd = (
-            f"$w=New-Object -ComObject WMPlayer.OCX;"
-            f"$w.settings.volume={volume};"
-            f"$w.URL='{filepath}';"
-            f"Start-Sleep 4;$w.close()"
-        )
-        return ["powershell", "-NoProfile", "-Command", ps_cmd]
     return None
 
 
@@ -306,11 +313,11 @@ def main():
     theme = CONFIG.get("theme", "mix")
     mode = CONFIG.get("mode", "full")
     total = sum(len(v) for v in EVENT_MAP.values())
-    print(f"Relay listening on 127.0.0.1:{PORT}")
+    print(f"Relay listening on {BIND}:{PORT}")
     print(f"PID: {os.getpid()}, Volume: {VOLUME}, Player: {PLAYER}")
     print(f"Theme: {theme}, Mode: {mode}, Sound files: {total}")
 
-    server = ReusableTCPServer(("127.0.0.1", PORT), SoundHandler)
+    server = ReusableTCPServer((BIND, PORT), SoundHandler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
